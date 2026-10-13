@@ -1,0 +1,226 @@
+dataset:
+  name: diabetes_medication_initiation_hospitalization
+  description: Synthetic teaching dataset for predicting hospitalization within 12 months after diabetes medication initiation.
+  synthetic: true
+  contains_real_patient_data: false
+  random_seed: 20261013
+  patient_count: 4000
+  target_outcome: hospitalized_12m
+  baseline_period:
+    definition: 365 days before index_date, excluding index_date
+    interval: "[index_date - 365 days, index_date)"
+  outcome_period:
+    definition: 365 days beginning on index_date
+    interval: "[index_date, index_date + 365 days)"
+  intended_teaching_points:
+    - Merge patient-level and long-format laboratory tables using patient_id.
+    - Filter laboratory results to a patient-specific baseline window.
+    - Pivot baseline laboratory results from long to wide format.
+    - Impute missing numerical values using training data only.
+    - Apply log1p transformations to right-skewed utilization, cost, and laboratory variables.
+    - Standardize continuous variables for regularized logistic regression.
+    - Detect multicollinearity among total and component visit counts.
+    - Compare prepared logistic regression with tree-based XGBoost using unscaled and untransformed numeric features.
+    - Evaluate discrimination and calibration on an untouched test set.
+  generation_notes:
+    - The outcome combines strong log-linear effects of skewed utilization, cost, triglycerides, and ALT with clinical thresholds, interactions, and random noise.
+    - The design intentionally favors the planned log1p and scaling workflow for regularized logistic regression while leaving raw tree splits informative.
+    - The relationship is predictive rather than causal.
+    - Laboratory records outside baseline are deliberate and must be excluded from feature construction.
+    - Within baseline, each patient has at most one record for each lab_name.
+    - Absence of a baseline lab row represents a missing measurement after pivoting.
+    - total_visits_baseline equals the sum of outpatient, ER, and inpatient visits, creating intentional multicollinearity.
+
+tables:
+  patients.csv:
+    grain: One row per synthetic patient and qualifying medication initiation.
+    primary_key: patient_id
+    columns:
+      patient_id:
+        type: string
+        description: Unique synthetic patient identifier.
+        example: P000001
+      index_date:
+        type: date
+        format: YYYY-MM-DD
+        description: Date of the qualifying diabetes medication initiation.
+      index_medication_class:
+        type: categorical
+        description: Diabetes medication class initiated on the index date.
+        allowed_values: [Metformin, Sulfonylurea, DPP-4 inhibitor, GLP-1 receptor agonist, SGLT2 inhibitor, Insulin]
+      age_at_index:
+        type: integer
+        unit: years
+        description: Patient age on the index date.
+      sex:
+        type: categorical
+        description: Recorded sex category.
+        allowed_values: [Female, Male, Unknown]
+      race_ethnicity:
+        type: categorical
+        description: Recorded race and ethnicity group.
+        allowed_values: [Asian, Black, Hispanic, White, Other, Unknown]
+      insurance_type:
+        type: categorical
+        description: Primary insurance at the index date.
+        allowed_values: [Commercial, Medicare, Medicaid, Self-pay, Other]
+      smoking_status:
+        type: categorical
+        description: Most recent smoking status during baseline.
+        allowed_values: [Never, Former, Current, Unknown]
+      diabetes_duration_years:
+        type: number
+        unit: years
+        description: Estimated duration of diabetes at the index date.
+        missingness: Intentionally contains blank values for imputation practice.
+      bmi_baseline:
+        type: number
+        unit: kg/m2
+        description: Most recent body mass index during baseline.
+        missingness: Intentionally contains blank values for imputation practice.
+      systolic_bp_baseline:
+        type: number
+        unit: mmHg
+        description: Most recent systolic blood pressure during baseline.
+        missingness: Intentionally contains blank values for imputation practice.
+      diastolic_bp_baseline:
+        type: number
+        unit: mmHg
+        description: Most recent diastolic blood pressure during baseline.
+        missingness: Uses the same missing records as systolic_bp_baseline.
+      total_visits_baseline:
+        type: integer
+        unit: encounters
+        description: Total outpatient, emergency-room, and inpatient encounters during baseline.
+        derivation: outpatient_visits_baseline + er_visits_baseline + inpatient_visits_baseline
+        teaching_role: Right-skewed and intentionally collinear with visit components.
+      outpatient_visits_baseline:
+        type: integer
+        unit: encounters
+        description: Outpatient encounters during baseline.
+        teaching_role: Highly correlated with total_visits_baseline.
+      er_visits_baseline:
+        type: integer
+        unit: encounters
+        description: Emergency-room encounters during baseline.
+      inpatient_visits_baseline:
+        type: integer
+        unit: encounters
+        description: Inpatient encounters during baseline.
+      prior_hospitalization_baseline:
+        type: binary
+        description: Whether at least one inpatient hospitalization occurred during baseline.
+        allowed_values: [0, 1]
+      medication_count_baseline:
+        type: integer
+        unit: distinct medications
+        description: Number of distinct prescription medications recorded during baseline.
+        missingness: Intentionally contains blank values for imputation practice.
+      total_healthcare_cost_baseline:
+        type: number
+        unit: USD
+        description: Total allowed healthcare cost during baseline.
+        teaching_role: Strongly right-skewed variable suitable for log1p transformation.
+      hypertension_baseline:
+        type: binary
+        description: Hypertension recorded during baseline.
+        allowed_values: [0, 1]
+      hyperlipidemia_baseline:
+        type: binary
+        description: Hyperlipidemia recorded during baseline.
+        allowed_values: [0, 1]
+      chronic_kidney_disease_baseline:
+        type: binary
+        description: Chronic kidney disease recorded during baseline.
+        allowed_values: [0, 1]
+      cardiovascular_disease_baseline:
+        type: binary
+        description: Atherosclerotic cardiovascular disease recorded during baseline.
+        allowed_values: [0, 1]
+      heart_failure_baseline:
+        type: binary
+        description: Heart failure recorded during baseline.
+        allowed_values: [0, 1]
+      diabetes_complication_baseline:
+        type: binary
+        description: Diabetes-related neuropathy, retinopathy, or nephropathy recorded during baseline.
+        allowed_values: [0, 1]
+      depression_baseline:
+        type: binary
+        description: Depression recorded during baseline.
+        allowed_values: [0, 1]
+      charlson_comorbidity_index:
+        type: integer
+        description: Synthetic summary comorbidity score derived from baseline conditions and age.
+      hospitalized_12m:
+        type: binary
+        role: outcome
+        description: Whether at least one inpatient hospitalization occurred within 12 months after index_date.
+        allowed_values: [0, 1]
+
+  labs.csv:
+    grain: One laboratory result per row; multiple rows may belong to a patient.
+    foreign_key:
+      column: patient_id
+      references: patients.csv.patient_id
+    baseline_uniqueness_rule: At most one row per patient_id and lab_name in the baseline period.
+    columns:
+      patient_id:
+        type: string
+        description: Synthetic patient identifier linking to patients.csv.
+      lab_date:
+        type: date
+        format: YYYY-MM-DD
+        description: Date on which the laboratory specimen was collected.
+        teaching_role: Includes baseline, pre-baseline, and post-index dates.
+      lab_name:
+        type: categorical
+        description: Standardized laboratory test name.
+        allowed_values: [hba1c, glucose, creatinine, egfr, ldl_cholesterol, hdl_cholesterol, triglycerides, alt]
+      lab_value:
+        type: number
+        description: Numeric laboratory result; unit is stored in lab_unit.
+      lab_unit:
+        type: categorical
+        description: Unit corresponding to lab_name.
+    lab_catalog:
+      hba1c:
+        unit: "%"
+        description: Hemoglobin A1c.
+      glucose:
+        unit: mg/dL
+        description: Serum glucose.
+      creatinine:
+        unit: mg/dL
+        description: Serum creatinine.
+      egfr:
+        unit: mL/min/1.73m2
+        description: Estimated glomerular filtration rate.
+      ldl_cholesterol:
+        unit: mg/dL
+        description: LDL cholesterol.
+      hdl_cholesterol:
+        unit: mg/dL
+        description: HDL cholesterol.
+      triglycerides:
+        unit: mg/dL
+        description: Triglycerides; intentionally right-skewed.
+      alt:
+        unit: U/L
+        description: Alanine aminotransferase; intentionally right-skewed.
+
+recommended_feature_preparation:
+  logistic_regression:
+    - Filter labs to the baseline period and pivot them to one row per patient.
+    - Split training, validation, and test data before fitting preprocessing steps.
+    - Median-impute continuous variables and consider missingness indicators.
+    - Apply log1p to skewed utilization counts, total healthcare cost, triglycerides, and ALT.
+    - Standardize continuous variables using parameters learned from training data.
+    - One-hot encode categorical variables.
+    - Drop total_visits_baseline or the component visit counts to resolve exact linear dependence.
+  xgboost_tree_booster:
+    - Filter and pivot labs using the same patient-specific baseline definition.
+    - Keep numeric variables on their original scale and leave skewed values untransformed for the teaching comparison.
+    - Leave missing numeric values as NaN so the tree booster can learn missing-value directions.
+    - One-hot encode categorical variables for a controlled comparison with logistic regression.
+    - Correlated features may remain for prediction, but interpret feature importance cautiously.

@@ -17,13 +17,13 @@ dataset:
     - Filter laboratory results to a patient-specific baseline window.
     - Pivot baseline laboratory results from long to wide format.
     - Impute missing numerical values using training data only.
-    - Apply log1p transformations to right-skewed utilization, cost, and laboratory variables.
+    - Apply log1p transformations to right-skewed utilization and laboratory variables.
     - Standardize continuous variables for regularized logistic regression.
     - Detect multicollinearity among total and component visit counts.
     - Compare prepared logistic regression with tree-based XGBoost using unscaled and untransformed numeric features.
     - Evaluate discrimination and calibration on an untouched test set.
   generation_notes:
-    - The outcome combines strong log-linear effects of skewed utilization, cost, triglycerides, and ALT with clinical thresholds, interactions, and random noise.
+    - The outcome combines strong log-linear effects of skewed utilization, triglycerides, and ALT with clinical thresholds, interactions, unobserved variation, and random noise.
     - The design intentionally favors the planned log1p and scaling workflow for regularized logistic regression while leaving raw tree splits informative.
     - The relationship is predictive rather than causal.
     - Laboratory records outside baseline are deliberate and must be excluded from feature construction.
@@ -116,11 +116,6 @@ tables:
         unit: distinct medications
         description: Number of distinct prescription medications recorded during baseline.
         missingness: Intentionally contains blank values for imputation practice.
-      total_healthcare_cost_baseline:
-        type: number
-        unit: USD
-        description: Total allowed healthcare cost during baseline.
-        teaching_role: Strongly right-skewed variable suitable for log1p transformation.
       hypertension_baseline:
         type: binary
         description: Hypertension recorded during baseline.
@@ -214,7 +209,7 @@ recommended_feature_preparation:
     - Filter labs to the baseline period and pivot them to one row per patient.
     - Split training, validation, and test data before fitting preprocessing steps.
     - Median-impute continuous variables and consider missingness indicators.
-    - Apply log1p to skewed utilization counts, total healthcare cost, triglycerides, and ALT.
+    - Apply log1p to skewed utilization counts, triglycerides, and ALT.
     - Standardize continuous variables using parameters learned from training data.
     - One-hot encode categorical variables.
     - Drop total_visits_baseline or the component visit counts to resolve exact linear dependence.

@@ -42,9 +42,10 @@ python -m pip install -r requirements.txt
 ```
 
 ## Ask ChatGPT to guide you the setup step by step
-```{markdown}
+<pre white-space="pre-wrap">
 Guide me **step by step** through setting up a complete Python development environment in [Windows/MacOS], including installing Python + VS Code + Python & Jupyter extension in VS Code + cloning the Gitub repo (github.com/alexkychen/ml_epi_lecture) + creating Python virtual environment in the repo working directory + activating the virtual env + installing project dependencies in requirements.txt + installing Codex for VS Code extension and OpenAI account sign-up + running a quick test with a jupyter notebook.    
-```
+</pre>
+
 **Make sure to choose the computer operation system of your own in the prompt**
 
 ## References
